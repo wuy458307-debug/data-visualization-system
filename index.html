@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动力总成台架试验数据分析平台</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左侧栏：列名列表 */
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 2px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .file-selector {
+            margin-top: 10px;
+        }
+
+        .file-selector select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 5px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 0.9em;
+        }
+
+        .file-selector select option {
+            background: #667eea;
+            color: white;
+        }
+
+        .column-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .column-item {
+            padding: 12px 15px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+
+        .column-item:hover {
+            background: #e9ecef;
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+
+        .column-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            font-weight: 600;
+        }
+
+        .column-item.selected {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            color: #1976d2;
+        }
+
+        .column-item.active.selected {
+            background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+            color: white;
+        }
+
+        /* 右侧主内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #f5f7fa;
+        }
+
+        .content-header {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 2px solid #e0e0e0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .content-header h2 {
+            color: #667eea;
+            font-size: 1.5em;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        .content-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: #f5f7fa;
+        }
+
+        /* 数据分析区域 */
+        .analysis-section {
+            margin-bottom: 30px;
+        }
+
+        .analysis-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .stat-card .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        /* 图表区域 */
+        .chart-section {
+            margin-top: 30px;
+        }
+
+        .charts-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .chart-container {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+            position: relative;
+            transition: box-shadow 0.3s;
+        }
+
+        .chart-container:hover {
+            box-shadow: 0 5px 20px rgba(0,0,0,0.12);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: -20px -20px 20px -20px;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .chart-header h4 {
+            color: #667eea;
+            font-size: 1.2em;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .chart-close {
+            background: #f0f0f0;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .chart-close:hover {
+            background: #e0e0e0;
+            color: #c33;
+        }
+
+        /* 图表控制面板样式 */
+        .chart-controls {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .chart-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .axis-control-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .axis-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .axis-control label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            min-width: 60px;
+        }
+
+        .axis-input {
+            width: 100px;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            transition: border-color 0.3s;
+        }
+
+        .axis-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+
+        .axis-separator {
+            color: #666;
+            font-weight: bold;
+        }
+
+        .axis-button {
+            padding: 8px 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .axis-button:hover {
+            background: #5568d3;
+        }
+
+        .axis-select-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .axis-select-group label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .axis-select {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .axis-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: 500px;
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .error {
+            padding: 20px;
+            background: #fee;
+            color: #c33;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state h3 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧栏：列名列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>📊 数据列名</h2>
+                <div class="file-selector">
+                    <input type="file" id="fileInput" accept=".dat,.csv,.txt,.xlsx" style="display: none;" onchange="handleFileSelect(event)">
+                    <button onclick="document.getElementById('fileInput').click()" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; color: white; cursor: pointer; font-size: 0.9em;">
+                        选择文件
+                    </button>
+                    <div id="fileName" style="margin-top: 10px; font-size: 0.85em; opacity: 0.9;"></div>
+                    <!-- 列名行号设置 -->
+                        <div style="margin-top: 15px;">
+                            <label style="font-size: 0.85em; opacity: 0.9; margin-right: 5px;">列名行号:</label>
+                            <input type="number" id="headerRowInput" value="1" min="1" style="width: 60px; padding: 5px; border: 1px solid rgba(255,255,255,0.3); border-radius: 3px; background: rgba(255,255,255,0.2); color: white; font-size: 0.85em;">
+                            <button onclick="reloadFileData()" style="margin-left: 5px; padding: 5px 10px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 3px; color: white; cursor: pointer; font-size: 0.85em;">
+                                应用
+                            </button>
+                        </div>
+                </div>
+            </div>
+            <div class="column-list" id="columnList">
+                <div class="empty-state">
+                    <h3>请选择文件</h3>
+                    <p>选择文件后，列名将显示在这里</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧主内容区 -->
+        <div class="main-content">
+            <div class="content-header">
+                <h2 id="selectedColumnName">请从左侧选择要分析的列</h2>
+            </div>
+            <div class="content-body" id="contentBody">
+                <div class="empty-state">
+                    <h3>👈 选择数据列</h3>
+                    <p>从左侧列表中选择一个列名，查看该列的数据分析和可视化图表</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let parsedData = null;
+        let columnNames = [];
+        let currentSelectedColumn = null;
+        let chartCounter = 0;
+        let activeCharts = []; // 存储活动的图表信息
+
+        // 预设颜色列表，用于区分不同的数据线
+        const lineColors = [
+            '#0066cc', '#ff6600', '#009900', '#cc0066', '#6600cc',
+            '#00cccc', '#ffcc00', '#cc6600', '#990099', '#006666'
+        ];
+
+        let currentFile = null;
+
+        // 处理文件选择
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            currentFile = file;
+            document.getElementById('fileName').textContent = file.name;
+
+            loadFile(file);
+        }
+
+        // 重新加载文件数据（当用户修改列名行号时）
+        function reloadFileData() {
+            if (!currentFile) {
+                alert('请先选择文件');
+                return;
+            }
+            loadFile(currentFile);
+        }
+
+        // 加载文件
+        function loadFile(file) {
+            if (file.name.endsWith('.xlsx')) {
+                // 处理.xlsx文件
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    loadXlsxData(e.target.result, file.name);
+                };
+                reader.onerror = () => {
+                    const columnList = document.getElementById('columnList');
+                    columnList.innerHTML = '<div class="error">Excel文件读取失败</div>';
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                // 处理文本文件（.dat, .csv, .txt）
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    loadFileData(e.target.result, file.name);
+                };
+                reader.onerror = () => {
+                    const columnList = document.getElementById('columnList');
+                    columnList.innerHTML = '<div class="error">文件读取失败</div>';
+                };
+                reader.readAsText(file, 'GBK'); // 尝试GBK编码
+            }
+        }
+
+        // 加载文本文件数据
+        function loadFileData(rawData, fileName) {
+            const columnList = document.getElementById('columnList');
+            columnList.innerHTML = '<div class="loading">正在解析文件...<br><div id="parseProgress" style="margin-top: 10px; font-size: 14px; color: #666;">准备解析...</div></div>';
+
+            // 使用setTimeout将解析任务放入事件队列，避免阻塞主线程
+            setTimeout(() => {
+                try {
+                    // 使用更高效的方式处理文件解析
+                    const parseProgress = document.getElementById('parseProgress');
+                    
+                    // 获取用户指定的列名行号（转换为0-based索引）
+                    const headerRow = parseInt(document.getElementById('headerRowInput').value) || 11;
+                    const headerIndex = headerRow - 1;
+                    
+                    // 1. 先找到列名行（使用indexOf代替split，减少内存占用）
+                    let lineCount = 0;
+                    let currentPos = 0;
+                    let headerLine = '';
+                    let dataStartPos = 0;
+                    
+                    // 逐行查找列名行
+                    while (currentPos < rawData.length && lineCount <= headerIndex) {
+                        const nextNewline = rawData.indexOf('\n', currentPos);
+                        if (nextNewline === -1) break;
+                        
+                        if (lineCount === headerIndex) {
+                            // 找到了列名行
+                            headerLine = rawData.substring(currentPos, nextNewline).trim();
+                            dataStartPos = nextNewline + 1;
+                        }
+                        
+                        currentPos = nextNewline + 1;
+                        lineCount++;
+                    }
+                    
+                    if (!headerLine) {
+                        throw new Error(`第${headerRow}行为空或文件行数不足，无法解析列名`);
+                    }
+
+                    // 解析列名（空格分隔）
+                    columnNames = headerLine.split(/\s+/).filter(v => v && v.trim());
+                    
+                    if (columnNames.length === 0) {
+                        throw new Error('未找到有效的列名');
+                    }
+
+                    // 2. 计算总行数（用于进度显示）
+                    let totalLines = 0;
+                    let tempPos = dataStartPos;
+                    while (tempPos < rawData.length) {
+                        const nextNewline = rawData.indexOf('\n', tempPos);
+                        if (nextNewline === -1) break;
+                        totalLines++;
+                        tempPos = nextNewline + 1;
+                    }
+                    
+                    // 3. 解析数据行（使用更高效的方式）
+                    parsedData = [];
+                    let processedLines = 0;
+                    let lastProgressUpdate = 0;
+                    
+                    currentPos = dataStartPos;
+                    while (currentPos < rawData.length) {
+                        const nextNewline = rawData.indexOf('\n', currentPos);
+                        if (nextNewline === -1) break;
+                        
+                        const line = rawData.substring(currentPos, nextNewline).trim();
+                        currentPos = nextNewline + 1;
+                        
+                        if (!line || line.startsWith('#')) continue;
+                        
+                        // 跳过空行和注释行
+                        if (line.length < 5) continue;
+                        
+                        // 优化：使用更高效的方式分割字段
+                        const values = [];
+                        let start = 0;
+                        for (let i = 0; i <= line.length; i++) {
+                            if (i === line.length || /\s/.test(line[i])) {
+                                if (i > start) {
+                                    const val = line.substring(start, i).trim();
+                                    if (val) values.push(val);
+                                }
+                                start = i + 1;
+                            }
+                        }
+                        
+                        if (values.length >= columnNames.length * 0.8) {
+                            const row = {};
+                            let hasValidData = false;
+                            
+                            columnNames.forEach((col, idx) => {
+                                if (idx < values.length) {
+                                    const val = values[idx];
+                                    const numVal = parseFloat(val);
+                                    if (!isNaN(numVal)) {
+                                        row[col] = numVal;
+                                        hasValidData = true;
+                                    } else {
+                                        row[col] = val || null;
+                                    }
+                                } else {
+                                    row[col] = null;
+                                }
+                            });
+                            
+                            if (hasValidData) {
+                                parsedData.push(row);
+                            }
+                        }
+                        
+                        processedLines++;
+                        
+                        // 更新进度（每处理1000行更新一次，避免频繁DOM操作）
+                        if (processedLines % 1000 === 0 || processedLines === totalLines) {
+                            const progress = Math.round((processedLines / totalLines) * 100);
+                            if (progress > lastProgressUpdate) {
+                                parseProgress.textContent = `正在解析数据... ${progress}% (${processedLines}/${totalLines}行)`;
+                                lastProgressUpdate = progress;
+                            }
+                        }
+                    }
+
+                    // 显示列名列表
+                    displayColumnList();
+
+                    console.log('文件加载成功:', {
+                        文件名: fileName,
+                        列数: columnNames.length,
+                        数据行数: parsedData.length,
+                        总处理行数: processedLines
+                    });
+
+                } catch (error) {
+                    console.error('加载文件失败:', error);
+                    columnList.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+                }
+            }, 0);
+        }
+
+        // 加载Excel文件数据
+        function loadXlsxData(arrayBuffer, fileName) {
+            const columnList = document.getElementById('columnList');
+            columnList.innerHTML = '<div class="loading">正在解析Excel文件...<br><div id="parseProgress" style="margin-top: 10px; font-size: 14px; color: #666;">准备解析...</div></div>';
+
+            // 使用setTimeout将解析任务放入事件队列，避免阻塞主线程
+            setTimeout(() => {
+                try {
+                    const parseProgress = document.getElementById('parseProgress');
+                    
+                    // 使用XLSX库解析Excel文件
+                    parseProgress.textContent = '正在读取Excel文件...';
+                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                    
+                    // 获取第一个工作表
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // 转换为JSON格式
+                    parseProgress.textContent = '正在转换数据格式...';
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    // 获取用户指定的列名行号（转换为0-based索引）
+                    const headerRow = parseInt(document.getElementById('headerRowInput').value) || 1;
+                    const headerIndex = headerRow - 1;
+                    
+                    if (jsonData.length < headerRow) {
+                        throw new Error(`Excel文件行数不足，无法获取第${headerRow}行的列名`);
+                    }
+
+                    // 获取列名
+                    const headerRowData = jsonData[headerIndex];
+                    columnNames = headerRowData.filter(v => v && v.toString().trim()).map(v => v.toString().trim());
+                    
+                    if (columnNames.length === 0) {
+                        throw new Error('未找到有效的列名');
+                    }
+
+                    // 解析数据（从列名行的下一行开始）
+                    parsedData = [];
+                    const dataStartLine = headerIndex + 1;
+                    const totalRows = jsonData.length - dataStartLine;
+                    
+                    parseProgress.textContent = '正在解析数据... 0%';
+                    
+                    // 分批处理数据
+                    const batchSize = 5000;
+                    for (let batchStart = dataStartLine; batchStart < jsonData.length; batchStart += batchSize) {
+                        const batchEnd = Math.min(batchStart + batchSize, jsonData.length);
+                        
+                        for (let i = batchStart; i < batchEnd; i++) {
+                            const row = jsonData[i];
+                            if (!row || row.length === 0) continue;
+
+                            const rowData = {};
+                            let hasValidData = false;
+                            
+                            columnNames.forEach((col, idx) => {
+                                if (idx < row.length) {
+                                    const val = row[idx];
+                                    if (val !== null && val !== undefined) {
+                                        const numVal = parseFloat(val);
+                                        if (!isNaN(numVal)) {
+                                            rowData[col] = numVal;
+                                            hasValidData = true;
+                                        } else {
+                                            rowData[col] = val;
+                                        }
+                                    } else {
+                                        rowData[col] = null;
+                                    }
+                                } else {
+                                    rowData[col] = null;
+                                }
+                            });
+                            
+                            if (hasValidData) {
+                                parsedData.push(rowData);
+                            }
+                        }
+                        
+                        // 更新进度
+                        const processed = batchEnd - dataStartLine;
+                        const progress = Math.round((processed / totalRows) * 100);
+                        parseProgress.textContent = `正在解析数据... ${progress}%`;
+                    }
+
+                    // 显示列名列表
+                    displayColumnList();
+
+                    console.log('Excel文件加载成功:', {
+                        文件名: fileName,
+                        工作表: firstSheetName,
+                        列数: columnNames.length,
+                        数据行数: parsedData.length
+                    });
+
+                } catch (error) {
+                    console.error('加载Excel文件失败:', error);
+                    columnList.innerHTML = `<div class="error">Excel加载失败: ${error.message}</div>`;
+                }
+            }, 0);
+        }
+
+        // 显示列名列表
+        function displayColumnList() {
+            const columnList = document.getElementById('columnList');
+            columnList.innerHTML = '';
+
+            columnNames.forEach((col, index) => {
+                const item = document.createElement('div');
+                item.className = 'column-item';
+                item.textContent = `${index + 1}. ${col}`;
+                item.onclick = (e) => selectColumn(col, item, e);
+                item.title = '点击选择 | Ctrl+点击多选';
+                columnList.appendChild(item);
+            });
+        }
+
+        // 选择列（支持多选）
+        function selectColumn(columnName, element, event) {
+            // 如果按住Ctrl或Cmd键，则多选
+            if (event && (event.ctrlKey || event.metaKey)) {
+                // 切换选中状态
+                element.classList.toggle('selected');
+                
+                // 更新active类：如果该列被选中，添加active；否则移除
+                if (element.classList.contains('selected')) {
+                    element.classList.add('active');
+                    // 自动分配Y轴：如果是第一个选中的列，使用主Y轴；否则交替使用Y轴
+                    const selectedItems = document.querySelectorAll('.column-item.selected');
+                    const axis = selectedItems.length % 2 === 0 ? 'y2' : 'y1'; // 自动交替分配Y轴
+                    addChart(columnName, axis);
+                } else {
+                    element.classList.remove('active');
+                    removeChartByColumn(columnName);
+                }
+                
+                // 更新标题，显示选中的列数
+                const selectedItems = document.querySelectorAll('.column-item.selected');
+                document.getElementById('selectedColumnName').textContent = `📈 已选择 ${selectedItems.length} 列`;
+            } else {
+                // 单选模式：清除所有选中状态
+                document.querySelectorAll('.column-item').forEach(item => {
+                    item.classList.remove('active', 'selected');
+                });
+                element.classList.add('active');
+                currentSelectedColumn = columnName;
+
+                // 更新标题
+                document.getElementById('selectedColumnName').textContent = `📈 ${columnName} - 数据分析`;
+
+                // 显示数据分析和图表（displayAnalysis内部会自动添加图表）
+                displayAnalysis(columnName);
+            }
+        }
+
+        // 根据列名移除图表
+        function removeChartByColumn(columnName) {
+            const chart = activeCharts.find(c => c.columnName === columnName);
+            if (chart) {
+                removeChart(chart.id);
+            }
+        }
+
+        // 添加新图表
+        function addNewChart() {
+            if (!parsedData || parsedData.length === 0) {
+                alert('请先加载文件并选择列');
+                return;
+            }
+
+            // 创建模态对话框
+            const modal = document.createElement('div');
+            modal.className = 'add-chart-modal';
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+            
+            const dialog = document.createElement('div');
+            dialog.className = 'add-chart-dialog';
+            dialog.style.cssText = 'background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); min-width: 400px;';
+            
+            // 创建选择框
+            const select = document.createElement('select');
+            select.id = 'columnSelectDialog';
+            select.style.cssText = 'width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; font-size: 1em; margin-bottom: 20px;';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = '请选择列...';
+            select.appendChild(defaultOption);
+            columnNames.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col;
+                option.textContent = col;
+                select.appendChild(option);
+            });
+            
+            // 创建按钮
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = '取消';
+            cancelBtn.style.cssText = 'padding: 10px 20px; background: #f0f0f0; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;';
+            cancelBtn.onclick = () => {
+                modal.remove();
+            };
+            
+            const confirmBtn = document.createElement('button');
+            confirmBtn.textContent = '确定';
+            confirmBtn.style.cssText = 'padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;';
+            confirmBtn.onclick = () => {
+                const columnName = select.value;
+                if (!columnName) {
+                    alert('请选择一个列');
+                    return;
+                }
+                // 添加图表
+                addChart(columnName);
+                // 关闭模态框
+                modal.remove();
+            };
+            
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end;';
+            buttonContainer.appendChild(cancelBtn);
+            buttonContainer.appendChild(confirmBtn);
+            
+            dialog.innerHTML = '<h3 style="margin-bottom: 20px; color: #667eea;">选择要添加的列</h3>';
+            dialog.appendChild(select);
+            dialog.appendChild(buttonContainer);
+            
+            modal.appendChild(dialog);
+            document.body.appendChild(modal);
+            
+            // 点击背景关闭（但不要关闭对话框本身）
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            };
+            
+            // 阻止对话框内的点击事件冒泡
+            dialog.onclick = (e) => {
+                e.stopPropagation();
+            };
+        }
+
+        // 添加图表（支持主坐标轴和次坐标轴）
+        function addChart(columnName, axis = 'y1') {
+            // 检查是否已存在该列的图表
+            const existingChart = activeCharts.find(c => c.columnName === columnName);
+            if (existingChart) {
+                // 如果已存在，重新绘制
+                drawChartForColumn(columnName, existingChart.id);
+                return;
+            }
+
+            // 新建图表
+            chartCounter++;
+            const newChartId = `chart_${chartCounter}`;
+            
+            const chartsContainer = document.getElementById('chartsContainer');
+            const chartDiv = document.createElement('div');
+            chartDiv.className = 'chart-container';
+            chartDiv.id = newChartId;
+            
+            chartDiv.innerHTML = `
+                <div class="chart-header">
+                    <h4>图${chartCounter}: ${columnName}</h4>
+                    <div class="chart-actions">
+                        <button onclick="showSelectColumnsDialog('${newChartId}')" class="axis-button" style="margin-right: 10px; padding: 6px 12px; font-size: 13px; background: #28a745; color: white;">选择列</button>
+                        <button class="chart-close" onclick="removeChart('${newChartId}')">×</button>
+                    </div>
+                </div>
+                <div class="chart-controls">
+                    <div class="chart-controls-row">
+                        <div class="axis-control-group">
+                            <div class="axis-control">
+                                <label>数据点范围:</label>
+                                <input type="number" id="${newChartId}_startPoint" placeholder="起始点" step="1" class="axis-input">
+                                <span class="axis-separator">-</span>
+                                <input type="number" id="${newChartId}_endPoint" placeholder="结束点" step="1" class="axis-input">
+                                <button onclick="updateDataRange('${newChartId}')" class="axis-button">应用</button>
+                            </div>
+                        </div>
+                        <div class="axis-control-group">
+                            <div class="axis-control">
+                                <label>X轴:</label>
+                                <input type="number" id="${newChartId}_xMin" placeholder="最小值" step="1" class="axis-input">
+                                <span class="axis-separator">-</span>
+                                <input type="number" id="${newChartId}_xMax" placeholder="最大值" step="1" class="axis-input">
+                                <button onclick="updateChartAxis('${newChartId}', 'x')" class="axis-button">应用</button>
+                            </div>
+                        </div>
+                        <div class="axis-control-group">
+                            <div class="axis-control">
+                                <label>主Y轴:</label>
+                                <input type="number" id="${newChartId}_y1Min" placeholder="最小值" step="0.01" class="axis-input">
+                                <span class="axis-separator">-</span>
+                                <input type="number" id="${newChartId}_y1Max" placeholder="最大值" step="0.01" class="axis-input">
+                                <button onclick="updateChartAxis('${newChartId}', 'y1')" class="axis-button">应用</button>
+                            </div>
+                        </div>
+                        <div class="axis-control-group">
+                            <div class="axis-control">
+                                <label>次Y轴:</label>
+                                <input type="number" id="${newChartId}_y2Min" placeholder="最小值" step="0.01" class="axis-input">
+                                <span class="axis-separator">-</span>
+                                <input type="number" id="${newChartId}_y2Max" placeholder="最大值" step="0.01" class="axis-input">
+                                <button onclick="updateChartAxis('${newChartId}', 'y2')" class="axis-button">应用</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas class="chart-canvas" id="${newChartId}_canvas"></canvas>
+                </div>
+            `;
+            
+            chartsContainer.appendChild(chartDiv);
+            
+            // 存储图表信息
+            const chartInfo = {
+                id: newChartId,
+                columnName: columnName,
+                chartNumber: chartCounter,
+                startPoint: null,
+                endPoint: null,
+                xMin: null,
+                xMax: null,
+                y1Min: null,
+                y1Max: null,
+                y2Min: null,
+                y2Max: null,
+                axis: axis, // y1: 主Y轴, y2: 次Y轴
+                lines: [ // 支持多条线条
+                    {
+                        columnName: columnName,
+                        axis: axis,
+                        color: lineColors[chartCounter % lineColors.length], // 循环使用不同颜色
+                        visible: true
+                    }
+                ]
+            };
+            activeCharts.push(chartInfo);
+
+            // 设置坐标轴选择
+            const axisSelect = document.getElementById(newChartId + '_axisSelect');
+            if (axisSelect) {
+                axisSelect.value = axis;
+            }
+
+            // 绘制图表（延迟以确保DOM完全渲染）
+            setTimeout(() => {
+                const canvas = document.getElementById(newChartId + '_canvas');
+                if (canvas) {
+                    drawChartForColumn(columnName, newChartId);
+                } else {
+                    console.error('Canvas元素未找到:', newChartId + '_canvas');
+                    // 重试一次
+                    setTimeout(() => {
+                        drawChartForColumn(columnName, newChartId);
+                    }, 200);
+                }
+            }, 150);
+        }
+
+        // 显示选择列对话框
+        function showSelectColumnsDialog(chartId) {
+            const chart = activeCharts.find(c => c.id === chartId);
+            if (!chart) return;
+
+            // 创建模态对话框
+            const modal = document.createElement('div');
+            modal.className = 'select-columns-modal';
+            modal.style.cssText = `
+                position: fixed; 
+                top: 0; 
+                left: 0; 
+                width: 100%; 
+                height: 100%; 
+                background: rgba(0,0,0,0.5); 
+                z-index: 10000; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white; 
+                padding: 20px; 
+                border-radius: 10px; 
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3); 
+                width: 500px; 
+                max-height: 80vh;
+                display: flex;
+                flex-direction: column;
+            `;
+            
+            // 对话框标题
+            const title = document.createElement('h3');
+            title.textContent = '选择要显示的列（可多选）';
+            title.style.cssText = `
+                margin-bottom: 20px; 
+                color: #333; 
+                font-size: 18px;
+                text-align: center;
+                border-bottom: 2px solid #667eea;
+                padding-bottom: 10px;
+            `;
+            dialog.appendChild(title);
+            
+            // 列选择区域
+            const columnsContainer = document.createElement('div');
+            columnsContainer.style.cssText = `
+                flex: 1;
+                overflow-y: auto;
+                margin-bottom: 20px;
+                padding: 10px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                max-height: 400px;
+            `;
+            
+            // 创建列选择项
+                columnNames.forEach((col, index) => {
+                    const isSelected = chart.lines.some(line => line.columnName === col);
+                    const line = chart.lines.find(line => line.columnName === col);
+                    const currentColor = line ? line.color : lineColors[index % lineColors.length];
+                    const currentAxis = line ? line.axis : (index % 2 === 0 ? 'y1' : 'y2'); // 自动分配Y轴
+                    
+                    const columnItem = document.createElement('div');
+                    columnItem.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        gap: 15px;
+                        padding: 10px;
+                        margin-bottom: 8px;
+                        background: white;
+                        border-radius: 6px;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    `;
+                    
+                    // 复选框
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `col_${index}`;
+                    checkbox.checked = isSelected;
+                    checkbox.style.cssText = 'width: 18px; height: 18px;';
+                    
+                    // 列名
+                    const label = document.createElement('label');
+                    label.htmlFor = `col_${index}`;
+                    label.textContent = col;
+                    label.style.cssText = 'flex: 1; font-size: 14px;';
+                    
+                    // Y轴选择
+                    const axisSelect = document.createElement('select');
+                    axisSelect.className = 'axis-select';
+                    axisSelect.style.cssText = 'width: 100px; padding: 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 14px;';
+                    
+                    const axisOptions = [
+                        { value: 'y1', text: '主Y轴' },
+                        { value: 'y2', text: '次Y轴' }
+                    ];
+                    
+                    axisOptions.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.value;
+                        option.textContent = opt.text;
+                        if (opt.value === currentAxis) {
+                            option.selected = true;
+                        }
+                        axisSelect.appendChild(option);
+                    });
+                    
+                    // 颜色选择器
+                    const colorPicker = document.createElement('input');
+                    colorPicker.type = 'color';
+                    colorPicker.value = currentColor;
+                    colorPicker.style.cssText = 'width: 40px; height: 30px; border: none; border-radius: 4px; cursor: pointer;';
+                    
+                    columnItem.appendChild(checkbox);
+                    columnItem.appendChild(label);
+                    columnItem.appendChild(axisSelect);
+                    columnItem.appendChild(colorPicker);
+                    columnsContainer.appendChild(columnItem);
+                });
+            
+            dialog.appendChild(columnsContainer);
+            
+            // 按钮区域
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.style.cssText = `
+                display: flex;
+                gap: 15px;
+                justify-content: flex-end;
+                padding-top: 15px;
+                border-top: 1px solid #e0e0e0;
+            `;
+            
+            // 取消按钮
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = '取消';
+            cancelBtn.style.cssText = `
+                padding: 10px 20px;
+                background: #f0f0f0;
+                color: #333;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 600;
+                transition: background-color 0.3s;
+            `;
+            cancelBtn.onclick = () => modal.remove();
+            cancelBtn.onmouseover = () => cancelBtn.style.backgroundColor = '#e0e0e0';
+            cancelBtn.onmouseout = () => cancelBtn.style.backgroundColor = '#f0f0f0';
+            
+            // 确定按钮
+            const confirmBtn = document.createElement('button');
+            confirmBtn.textContent = '确定';
+            confirmBtn.style.cssText = `
+                padding: 10px 20px;
+                background: #667eea;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 600;
+                transition: background-color 0.3s;
+            `;
+            confirmBtn.onclick = () => {
+                // 处理用户选择
+                const selectedLines = [];
+                const columnItems = columnsContainer.querySelectorAll('div');
+                
+                let yAxisIndex = 0;
+                columnItems.forEach((item, index) => {
+                    const checkbox = item.querySelector('input[type="checkbox"]');
+                    const colorPicker = item.querySelector('input[type="color"]');
+                    const axisSelect = item.querySelector('.axis-select');
+                    
+                    if (checkbox.checked) {
+                        selectedLines.push({
+                            columnName: columnNames[index],
+                            axis: axisSelect ? axisSelect.value : (yAxisIndex % 2 === 0 ? 'y1' : 'y2'), // 自动分配Y轴
+                            color: colorPicker.value,
+                            visible: true
+                        });
+                        yAxisIndex++;
+                    }
+                });
+                
+                // 更新图表线条配置
+                chart.lines = selectedLines;
+                
+                // 重新绘制图表
+                drawChartForColumn(chart.columnName, chart.id);
+                
+                // 关闭对话框
+                modal.remove();
+            };
+            confirmBtn.onmouseover = () => confirmBtn.style.backgroundColor = '#5568d3';
+            confirmBtn.onmouseout = () => confirmBtn.style.backgroundColor = '#667eea';
+            
+            buttonsContainer.appendChild(cancelBtn);
+            buttonsContainer.appendChild(confirmBtn);
+            dialog.appendChild(buttonsContainer);
+            
+            modal.appendChild(dialog);
+            document.body.appendChild(modal);
+            
+            // 点击背景关闭对话框
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            };
+        }
+
+        // 改变图表使用的坐标轴
+        function changeChartAxis(chartId, axis) {
+            const chartInfo = activeCharts.find(c => c.id === chartId);
+            if (chartInfo) {
+                // 更新主列的坐标轴
+                chartInfo.axis = axis;
+                
+                // 如果只有一条线，也更新该线的坐标轴
+                if (chartInfo.lines && chartInfo.lines.length === 1) {
+                    chartInfo.lines[0].axis = axis;
+                }
+                
+                // 重新绘制图表
+                drawChartForColumn(chartInfo.columnName, chartId);
+            }
+        }
+
+
+        // 更新数据点范围
+        function updateDataRange(chartId) {
+            const chartInfo = activeCharts.find(c => c.id === chartId);
+            if (!chartInfo) return;
+
+            const startPointInput = document.getElementById(chartId + '_startPoint');
+            const endPointInput = document.getElementById(chartId + '_endPoint');
+            const startPoint = startPointInput.value ? parseInt(startPointInput.value) : null;
+            const endPoint = endPointInput.value ? parseInt(endPointInput.value) : null;
+            
+            if (startPoint !== null && endPoint !== null && startPoint >= endPoint) {
+                alert('起始点必须小于结束点');
+                return;
+            }
+            
+            chartInfo.startPoint = startPoint;
+            chartInfo.endPoint = endPoint;
+
+            // 重新绘制图表
+            drawChartForColumn(chartInfo.columnName, chartId);
+        }
+
+        // 更新图表坐标轴
+        function updateChartAxis(chartId, axis) {
+            const chartInfo = activeCharts.find(c => c.id === chartId);
+            if (!chartInfo) return;
+
+            if (axis === 'x') {
+                const xMinInput = document.getElementById(chartId + '_xMin');
+                const xMaxInput = document.getElementById(chartId + '_xMax');
+                const xMin = xMinInput.value ? parseFloat(xMinInput.value) : null;
+                const xMax = xMaxInput.value ? parseFloat(xMaxInput.value) : null;
+                
+                if (xMin !== null && xMax !== null && xMin >= xMax) {
+                    alert('X轴最小值必须小于最大值');
+                    return;
+                }
+                
+                chartInfo.xMin = xMin;
+                chartInfo.xMax = xMax;
+            } else if (axis === 'y1') {
+                const yMinInput = document.getElementById(chartId + '_y1Min');
+                const yMaxInput = document.getElementById(chartId + '_y1Max');
+                const yMin = yMinInput.value ? parseFloat(yMinInput.value) : null;
+                const yMax = yMaxInput.value ? parseFloat(yMaxInput.value) : null;
+                
+                if (yMin !== null && yMax !== null && yMin >= yMax) {
+                    alert('Y轴最小值必须小于最大值');
+                    return;
+                }
+                
+                chartInfo.y1Min = yMin;
+                chartInfo.y1Max = yMax;
+            } else if (axis === 'y2') {
+                const yMinInput = document.getElementById(chartId + '_y2Min');
+                const yMaxInput = document.getElementById(chartId + '_y2Max');
+                const yMin = yMinInput.value ? parseFloat(yMinInput.value) : null;
+                const yMax = yMaxInput.value ? parseFloat(yMaxInput.value) : null;
+                
+                if (yMin !== null && yMax !== null && yMin >= yMax) {
+                    alert('次Y轴最小值必须小于最大值');
+                    return;
+                }
+                
+                chartInfo.y2Min = yMin;
+                chartInfo.y2Max = yMax;
+            }
+
+            // 重新绘制图表
+            drawChartForColumn(chartInfo.columnName, chartId);
+        }
+
+        // 移除图表
+        function removeChart(chartId) {
+            const chartElement = document.getElementById(chartId);
+            if (chartElement) {
+                chartElement.remove();
+                activeCharts = activeCharts.filter(chart => chart.id !== chartId);
+            }
+        }
+
+        // 显示数据分析
+        function displayAnalysis(columnName) {
+            const contentBody = document.getElementById('contentBody');
+            
+            if (!parsedData || parsedData.length === 0) {
+                contentBody.innerHTML = '<div class="error">没有数据可分析</div>';
+                return;
+            }
+
+            // 获取该列的数据
+            const values = parsedData
+                .map(row => row[columnName])
+                .filter(v => v !== null && v !== undefined && !isNaN(v) && typeof v === 'number');
+
+            if (values.length === 0) {
+                contentBody.innerHTML = '<div class="error">该列没有有效的数值数据</div>';
+                return;
+            }
+
+            // 计算统计信息
+            const sorted = [...values].sort((a, b) => a - b);
+            const sum = values.reduce((a, b) => a + b, 0);
+            const mean = sum / values.length;
+            const variance = values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / values.length;
+            const std = Math.sqrt(variance);
+            const min = sorted[0];
+            const max = sorted[sorted.length - 1];
+            const median = sorted[Math.floor(sorted.length / 2)];
+            const q25 = sorted[Math.floor(sorted.length * 0.25)];
+            const q75 = sorted[Math.floor(sorted.length * 0.75)];
+
+            // 生成HTML
+            let html = `
+                <div class="analysis-section">
+                    <h3>📊 基本统计信息</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="label">数据点数</div>
+                            <div class="value">${values.length.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">平均值</div>
+                            <div class="value">${mean.toFixed(4)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">标准差</div>
+                            <div class="value">${std.toFixed(4)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">最小值</div>
+                            <div class="value">${min.toFixed(4)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">最大值</div>
+                            <div class="value">${max.toFixed(4)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">中位数</div>
+                            <div class="value">${median.toFixed(4)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">25%分位数</div>
+                            <div class="value">${q25.toFixed(4)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">75%分位数</div>
+                            <div class="value">${q75.toFixed(4)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3>📈 折线图</h3>
+                        <button onclick="addNewChart()" style="padding: 8px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.9em;">
+                            + 添加图表
+                        </button>
+                    </div>
+                    <div class="charts-container" id="chartsContainer">
+                        <!-- 图表将动态添加到这里 -->
+                    </div>
+                </div>
+            `;
+
+            contentBody.innerHTML = html;
+
+            // 等待DOM更新完成后再操作
+            setTimeout(() => {
+                // 清空之前的图表
+                const chartsContainer = document.getElementById('chartsContainer');
+                if (chartsContainer) {
+                    chartsContainer.innerHTML = '';
+                }
+                activeCharts = [];
+                chartCounter = 0;
+
+                // 添加第一个图表
+                addChart(columnName);
+            }, 50);
+        }
+
+        // 为指定列绘制图表
+        function drawChartForColumn(columnName, chartId) {
+            if (!parsedData || parsedData.length === 0) {
+                console.warn('没有数据可绘制');
+                return;
+            }
+
+            const canvas = document.getElementById(chartId + '_canvas');
+            if (!canvas) {
+                console.error('Canvas元素未找到:', chartId + '_canvas');
+                return;
+            }
+
+            // 获取图表信息
+            const chartInfo = activeCharts.find(c => c.id === chartId);
+            
+            // 绘制折线图（支持多条线）
+            drawLineChart(columnName, canvas, chartInfo);
+        }
+
+        // 绘制折线图（支持多条线）
+        function drawLineChart(columnName, canvasElement, chartInfo) {
+            if (!canvasElement) return;
+
+            // 获取容器尺寸并设置Canvas分辨率（解决模糊问题）
+            const container = canvasElement.parentElement;
+            const containerWidth = container.clientWidth;
+            const containerHeight = 500;
+            
+            // 设置Canvas实际尺寸（高分辨率）
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            canvasElement.width = containerWidth * devicePixelRatio;
+            canvasElement.height = containerHeight * devicePixelRatio;
+            canvasElement.style.width = containerWidth + 'px';
+            canvasElement.style.height = containerHeight + 'px';
+
+            const ctx = canvasElement.getContext('2d');
+            ctx.scale(devicePixelRatio, devicePixelRatio);
+
+            const width = containerWidth;
+            const height = containerHeight;
+            // 增加右侧边距，为次Y轴留出空间
+            const margin = { top: 50, right: 100, bottom: 80, left: 100 };
+
+            // 清空画布
+            ctx.clearRect(0, 0, width, height);
+
+            // 获取所有可见线条的数据
+            const visibleLines = chartInfo.lines.filter(line => line.visible);
+            if (visibleLines.length === 0) {
+                // 如果没有可见线条，显示提示
+                ctx.fillStyle = '#999';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('没有可见的数据线', width / 2, height / 2);
+                return;
+            }
+
+            // 准备所有数据，用于计算坐标轴范围
+            let allValues = [];
+            const lineData = {};
+            
+            // 收集所有可见线条的数据
+            visibleLines.forEach(line => {
+                const values = parsedData
+                    .map(row => row[line.columnName])
+                    .filter(v => v !== null && v !== undefined && !isNaN(v) && typeof v === 'number');
+                
+                lineData[line.columnName] = values;
+                allValues = allValues.concat(values);
+            });
+
+            // 计算数据范围（考虑自定义范围）
+            let minValue = Math.min(...allValues);
+            let maxValue = Math.max(...allValues);
+            
+            // 计算数据点范围（考虑自定义范围）
+            let dataStart = 0;
+            let dataEnd = Math.max(...Object.values(lineData).map(data => data.length - 1));
+            
+            // 应用数据点范围过滤
+            if (chartInfo) {
+                if (chartInfo.startPoint !== null) {
+                    dataStart = Math.max(0, chartInfo.startPoint - 1);
+                }
+                if (chartInfo.endPoint !== null) {
+                    dataEnd = Math.min(dataEnd, chartInfo.endPoint - 1);
+                }
+            }
+            
+            // 计算X轴范围（考虑自定义范围）
+            let xMin = dataStart;
+            let xMax = dataEnd;
+            
+            if (chartInfo) {
+                if (chartInfo.xMin !== null) xMin = Math.max(xMin, Math.min(chartInfo.xMin - 1, xMax));
+                if (chartInfo.xMax !== null) xMax = Math.min(xMax, Math.max(chartInfo.xMax - 1, xMin));
+                if (chartInfo.xMin !== null && chartInfo.xMax !== null) {
+                    xMin = Math.max(dataStart, chartInfo.xMin - 1);
+                    xMax = Math.min(dataEnd, chartInfo.xMax - 1);
+                }
+            }
+            
+            // 过滤数据（根据X轴范围）
+            Object.keys(lineData).forEach(column => {
+                lineData[column] = lineData[column].slice(xMin, xMax + 1);
+            });
+
+            // 缩放函数
+            // X轴：索引从0开始，对应数组索引
+            const xScale = (index) => {
+                const maxLength = Math.max(...Object.values(lineData).map(data => data.length - 1));
+                if (maxLength <= 1) return margin.left;
+                return margin.left + (index / maxLength) * (width - margin.left - margin.right);
+            };
+            
+            // Y轴：数值映射（主Y轴）
+            const yScaleY1 = (value) => {
+                // 使用主Y轴范围
+                let y1Min = minValue;
+                let y1Max = maxValue;
+                if (chartInfo && chartInfo.y1Min !== null && chartInfo.y1Max !== null) {
+                    y1Min = chartInfo.y1Min;
+                    y1Max = chartInfo.y1Max;
+                }
+                const y1Range = y1Max - y1Min;
+                const y1Padding = y1Range < 0.1 ? y1Range * 0.2 : (y1Range > 100 ? y1Range * 0.05 : y1Range * 0.1);
+                const range = y1Range + y1Padding * 2;
+                if (range === 0) return margin.top + (height - margin.top - margin.bottom) / 2;
+                return margin.top + (height - margin.top - margin.bottom) - ((value - y1Min + y1Padding) / range) * (height - margin.top - margin.bottom);
+            };
+            
+            // Y轴：数值映射（次Y轴）
+            const yScaleY2 = (value) => {
+                // 使用次Y轴范围
+                let y2Min = minValue;
+                let y2Max = maxValue;
+                if (chartInfo && chartInfo.y2Min !== null && chartInfo.y2Max !== null) {
+                    y2Min = chartInfo.y2Min;
+                    y2Max = chartInfo.y2Max;
+                }
+                const y2Range = y2Max - y2Min;
+                const y2Padding = y2Range < 0.1 ? y2Range * 0.2 : (y2Range > 100 ? y2Range * 0.05 : y2Range * 0.1);
+                const range = y2Range + y2Padding * 2;
+                if (range === 0) return margin.top + (height - margin.top - margin.bottom) / 2;
+                return margin.top + (height - margin.top - margin.bottom) - ((value - y2Min + y2Padding) / range) * (height - margin.top - margin.bottom);
+            };
+
+            // 绘制背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(margin.left, margin.top, width - margin.left - margin.right, height - margin.top - margin.bottom);
+
+            // 绘制网格
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                const y = margin.top + ((height - margin.top - margin.bottom) / 10) * i;
+                ctx.beginPath();
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(width - margin.right, y);
+                ctx.stroke();
+            }
+
+            // 检查是否需要显示次Y轴
+            const hasMultipleYAxes = visibleLines.some(line => line.axis === 'y2');
+            
+            // 绘制坐标轴
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, height - margin.bottom);
+            ctx.lineTo(width - margin.right, height - margin.bottom);
+            ctx.stroke();
+            
+            // 如果有次Y轴，绘制次Y轴
+            if (hasMultipleYAxes) {
+                ctx.beginPath();
+                ctx.moveTo(width - margin.right, margin.top);
+                ctx.lineTo(width - margin.right, height - margin.bottom);
+                ctx.stroke();
+            }
+
+            // 绘制X轴刻度和标签
+            ctx.fillStyle = '#666';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            const xTickCount = 10;
+            const maxLength = Math.max(...Object.values(lineData).map(data => data.length - 1));
+            
+            for (let i = 0; i <= xTickCount; i++) {
+                const x = margin.left + (i / xTickCount) * (width - margin.left - margin.right);
+                // X轴显示实际的数据点索引（从1开始，对应原始数据行号）
+                const relativeIndex = Math.round((i / xTickCount) * maxLength);
+                const value = xMin + relativeIndex + 1;
+                
+                // 绘制刻度线
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, height - margin.bottom);
+                ctx.lineTo(x, height - margin.bottom + 5);
+                ctx.stroke();
+                
+                // 绘制标签（格式化大数字）
+                const label = value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value.toString();
+                ctx.fillText(label, x, height - margin.bottom + 8);
+            }
+            
+            // X轴标题
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('数据点索引', margin.left + (width - margin.left - margin.right) / 2, height - 20);
+
+            // 绘制Y轴刻度和标签（主Y轴）
+            ctx.fillStyle = '#666';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            
+            const yTickCount = 10;
+            let y1Min = minValue;
+            let y1Max = maxValue;
+            if (chartInfo && chartInfo.y1Min !== null && chartInfo.y1Max !== null) {
+                y1Min = chartInfo.y1Min;
+                y1Max = chartInfo.y1Max;
+            }
+            const y1Range = y1Max - y1Min;
+            const y1Padding = y1Range < 0.1 ? y1Range * 0.2 : (y1Range > 100 ? y1Range * 0.05 : y1Range * 0.1);
+            
+            for (let i = 0; i <= yTickCount; i++) {
+                const y = margin.top + (i / yTickCount) * (height - margin.top - margin.bottom);
+                // Y轴从最大值到最小值
+                const value = y1Max + y1Padding - (i / yTickCount) * (y1Range + y1Padding * 2);
+                
+                // 绘制刻度线
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(margin.left, y);
+                ctx.lineTo(margin.left - 5, y);
+                ctx.stroke();
+                
+                // 绘制标签（根据数值范围决定小数位数）
+                let label;
+                if (Math.abs(value) < 0.01) {
+                    label = value.toFixed(4);
+                } else if (Math.abs(value) < 1) {
+                    label = value.toFixed(3);
+                } else if (Math.abs(value) < 100) {
+                    label = value.toFixed(2);
+                } else {
+                    label = value.toFixed(1);
+                }
+                ctx.fillText(label, margin.left - 10, y);
+            }
+            
+            // Y轴标题
+            ctx.save();
+            ctx.translate(15, margin.top + (height - margin.top - margin.bottom) / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('主Y轴数值', 0, 0);
+            ctx.restore();
+            
+            // 绘制次Y轴刻度和标签（如果有次Y轴）
+            if (hasMultipleYAxes) {
+                ctx.fillStyle = '#666';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                
+                const yTickCount = 10;
+                let y2Min = minValue;
+                let y2Max = maxValue;
+                if (chartInfo && chartInfo.y2Min !== null && chartInfo.y2Max !== null) {
+                    y2Min = chartInfo.y2Min;
+                    y2Max = chartInfo.y2Max;
+                }
+                const y2Range = y2Max - y2Min;
+                const y2Padding = y2Range < 0.1 ? y2Range * 0.2 : (y2Range > 100 ? y2Range * 0.05 : y2Range * 0.1);
+                
+                for (let i = 0; i <= yTickCount; i++) {
+                    const y = margin.top + ((height - margin.top - margin.bottom) / 10) * i;
+                    // 次Y轴从最大值到最小值
+                    const value = y2Max + y2Padding - (i / yTickCount) * (y2Range + y2Padding * 2);
+                    
+                    // 绘制刻度线
+                    ctx.strokeStyle = '#999';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(width - margin.right, y);
+                    ctx.lineTo(width - margin.right + 5, y);
+                    ctx.stroke();
+                    
+                    // 绘制标签（根据数值范围决定小数位数）
+                    let label;
+                    if (Math.abs(value) < 0.01) {
+                        label = value.toFixed(4);
+                    } else if (Math.abs(value) < 1) {
+                        label = value.toFixed(3);
+                    } else if (Math.abs(value) < 100) {
+                        label = value.toFixed(2);
+                    } else {
+                        label = value.toFixed(1);
+                    }
+                    ctx.fillText(label, width - margin.right + 10, y);
+                }
+                
+                // 次Y轴标题
+                ctx.save();
+                ctx.translate(width - 15, margin.top + (height - margin.top - margin.bottom) / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('次Y轴数值', 0, 0);
+                ctx.restore();
+            }
+
+            // 绘制所有可见的数据线
+            visibleLines.forEach(line => {
+                const values = lineData[line.columnName];
+                if (!values || values.length === 0) return;
+
+                // 选择对应的Y轴缩放函数
+                const yScale = line.axis === 'y1' ? yScaleY1 : yScaleY2;
+
+                // 绘制折线
+                ctx.strokeStyle = line.color;
+                ctx.lineWidth = 2.5;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+
+                // 如果数据点太多，只绘制关键点以提高性能
+                const drawEveryN = values.length > 10000 ? Math.ceil(values.length / 5000) : 1;
+                
+                values.forEach((value, index) => {
+                    if (index % drawEveryN === 0 || index === values.length - 1) {
+                        const x = xScale(index);
+                        const y = yScale(value);
+                        
+                        if (index === 0 || (index % drawEveryN === 0 && index > 0)) {
+                            ctx.lineTo(x, y);
+                        } else {
+                            ctx.moveTo(x, y);
+                        }
+                    }
+                });
+
+                ctx.stroke();
+
+                // 如果数据点不太多，绘制数据点
+                if (values.length <= 500) {
+                    ctx.fillStyle = line.color;
+                    values.forEach((value, index) => {
+                        if (index % Math.max(1, Math.floor(values.length / 100)) === 0) {
+                            const x = xScale(index);
+                            const y = yScale(value);
+                            ctx.beginPath();
+                            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    });
+                }
+            });
+
+            // 绘制图例
+            drawLegend(ctx, visibleLines, margin.left, margin.top - 40, width - margin.left - margin.right);
+
+            // 绘制标题
+            ctx.fillStyle = '#667eea';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('数据对比', margin.left + (width - margin.left - margin.right) / 2, 25);
+        }
+
+        // 绘制图例
+        function drawLegend(ctx, lines, x, y, width) {
+            const legendItemHeight = 20;
+            const legendItemMargin = 15;
+            
+            let currentX = x;
+            let currentY = y;
+            
+            lines.forEach((line, index) => {
+                const itemWidth = ctx.measureText(line.columnName).width + 25;
+                
+                // 如果超过宽度，换行
+                if (currentX + itemWidth > x + width - 10) {
+                    currentX = x;
+                    currentY += legendItemHeight + 5;
+                }
+                
+                // 绘制颜色方块
+                ctx.fillStyle = line.color;
+                ctx.fillRect(currentX, currentY + 3, 15, 15);
+                
+                // 绘制文字
+                ctx.fillStyle = '#555';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(line.columnName, currentX + 20, currentY + 10.5);
+                
+                currentX += itemWidth + legendItemMargin;
+            });
+        }
+
+        // 页面加载时尝试自动加载文件
+        window.addEventListener('load', () => {
+            // 可以在这里设置默认文件
+            // loadFile();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# IDE files
+.idea/
+*.iml
+
+# Data files
+*.dat
+*.csv
+*.xlsx
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node.js files (if applicable)
+node_modules/
+package-lock.json
